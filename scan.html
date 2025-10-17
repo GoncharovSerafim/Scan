@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Склад</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 1.5em;
+            margin-bottom: 5px;
+        }
+
+        .controls {
+            background: #34495e;
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .scanner-section {
+            padding: 20px;
+        }
+
+        .status-bar {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .status-bar.add-mode {
+            background: #fff3cd;
+        }
+
+        .status-bar.cart-mode {
+            background: #d4edda;
+        }
+
+        .barcode-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .tables-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .table-section {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .table-section h3 {
+            background: #2c3e50;
+            color: white;
+            padding: 10px;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f8f9fa;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .remove-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .cart-section {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+
+        .user-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .complete-btn {
+            width: 100%;
+            padding: 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .low-stock {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .connection-status {
+            padding: 8px 12px;
+            text-align: center;
+            font-size: 13px;
+            border-radius: 5px;
+            margin: 8px 20px;
+        }
+
+        .connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+    </style>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>📦 Склад - Сканер штрихкодов</h1>
+        <p>Тележка: 12345678906</p>
+    </header>
+
+    <div id="connectionStatus" class="connection-status">
+        🔄 Подключение к Firebase...
+    </div>
+
+    <div class="controls">
+        <button class="btn btn-warning" onclick="toggleAddProductsMode()" id="addProductsBtn">
+            📦 Режим добавления
+        </button>
+        <button class="btn btn-primary" onclick="resetOperation()">🔄 Сброс</button>
+        <button class="btn btn-success" onclick="showAddProductModal()">➕ Добавить товар</button>
+    </div>
+
+    <div class="scanner-section">
+        <div class="status-bar" id="statusBar">
+            Отсканируйте тележку или товар
+        </div>
+
+        <input type="text" class="barcode-input" placeholder="🔍 Сканируйте штрихкод..." id="barcodeInput" autofocus>
+
+        <div class="tables-container">
+            <div class="table-section">
+                <h3>🛒 Тележка</h3>
+                <table id="cartTable">
+                    <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Кол-во</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody id="cartTableBody">
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: #666; padding: 20px;">
+                            Пусто
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-section">
+                <h3>📦 Полки</h3>
+                <table id="shelvesTable">
+                    <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Наличие</th>
+                        <th>Штрихкод</th>
+                    </tr>
+                    </thead>
+                    <tbody id="shelvesTableBody">
+                    <tr>
+                        <td colspan="3" class="loading">Загрузка из Firebase...</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="cart-section">
+            <input type="text" class="user-input" placeholder="👤 Ваше имя" id="userName">
+            <button class="complete-btn" onclick="completeTransaction()">
+                ✅ Подтвердить выдачу
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления товара -->
+<div id="addProductModal"
+     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center;">
+    <div style="background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 400px;">
+        <h3>➕ Добавить товар</h3>
+        <input type="text" class="user-input" placeholder="Штрихкод" id="newBarcode">
+        <input type="text" class="user-input" placeholder="Название товара" id="newName">
+        <input type="number" class="user-input" placeholder="Количество" id="newQuantity">
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button class="btn btn-success" onclick="addProductToFirebase()" style="flex: 1;">Добавить</button>
+            <button class="btn btn-primary" onclick="hideAddProductModal()" style="flex: 1;">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 🔥 Firebase конфигурация
+    const firebaseConfig = {
+        apiKey: "AIzaSyBcFsu6uilMY_uxDMtbFJuoOc5_Bit3wQw",
+        authDomain: "inventory-system-1a5b7.firebaseapp.com",
+        projectId: "inventory-system-1a5b7",
+        storageBucket: "inventory-system-1a5b7.firebasestorage.app",
+        messagingSenderId: "674916814129",
+        appId: "1:674916814129:web:df3973a98d2db2fd617410"
+    };
+
+    // 🎯 Состояние системы
+    let state = {
+        mode: null,
+        currentCart: null,
+        pendingProduct: null,
+        cartContents: {},
+        shelfContents: {}
+    };
+
+    let inventory = [];
+    let db = null;
+
+    // 🚀 Инициализация Firebase
+    async function init() {
+        try {
+            // Инициализация Firebase
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+
+            updateConnectionStatus('✅ Подключено к Firebase', 'connected');
+
+            // Настройка сканера
+            const barcodeInput = document.getElementById('barcodeInput');
+            barcodeInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    processScan(this.value.trim());
+                    this.value = '';
+                }
+            });
+
+            // Загрузка данных из Firebase
+            await loadInventoryFromFirebase();
+
+        } catch (error) {
+            console.error('Ошибка Firebase:', error);
+            updateConnectionStatus('❌ Ошибка Firebase', 'disconnected');
+            loadDemoData();
+        }
+    }
+
+    // 📥 Загрузка инвентаря из Firebase
+    async function loadInventoryFromFirebase() {
+        try {
+            const snapshot = await db.collection("inventory").get();
+            inventory = [];
+            state.shelfContents = {};
+
+            snapshot.forEach(doc => {
+                const product = {
+                    id: doc.id,
+                    ...doc.data()
+                };
+                inventory.push(product);
+                state.shelfContents[product.barcode] = product.quantity;
+            });
+
+            updateDisplays();
+
+        } catch (error) {
+            console.error('Ошибка загрузки инвентаря:', error);
+            loadDemoData();
+        }
+    }
+
+    // ➕ Добавление товара в Firebase
+    async function addProductToFirebase() {
+        const barcode = document.getElementById('newBarcode').value.trim();
+        const name = document.getElementById('newName').value.trim();
+        const quantity = parseInt(document.getElementById('newQuantity').value);
+
+        if (!barcode || !name || isNaN(quantity)) {
+            alert('Заполните все поля');
+            return;
+        }
+
+        try {
+            await db.collection("inventory").add({
+                barcode: barcode,
+                name: name,
+                quantity: quantity,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            alert('✅ Товар добавлен в Firebase');
+            hideAddProductModal();
+            await loadInventoryFromFirebase(); // Перезагружаем данные
+
+        } catch (error) {
+            alert('❌ Ошибка добавления: ' + error.message);
+        }
+    }
+
+    // 📨 Обработка сканирования
+    async function processScan(barcode) {
+        if (!barcode) return;
+
+        // РЕЖИМ ДОБАВЛЕНИЯ - товары сразу в тележку
+        if (state.mode === 'add_products') {
+            addProductToCart(barcode);
+            return;
+        }
+
+        // РЕЖИМ ТЕЛЕЖКА→ПОЛКА - возврат товаров
+        if (state.mode === 'cart_to_shelf') {
+            returnProductToShelf(barcode);
+            return;
+        }
+
+        // РЕЖИМ ПОДТВЕРЖДЕНИЯ - ждем тележку
+        if (state.mode === 'confirm_product') {
+            if (barcode === "12345678906") {
+                await confirmProductToCart();
+                resetOperation();
+            } else {
+                alert('Для подтверждения отсканируйте тележку');
+            }
+            return;
+        }
+
+        // ОБЫЧНЫЙ РЕЖИМ
+
+        // Начинаем операцию ТЕЛЕЖКА→ПОЛКА
+        if (barcode === "12345678906") {
+            state.mode = 'cart_to_shelf';
+            state.currentCart = barcode;
+            updateStatusBar("Режим: ТЕЛЕЖКА→ПОЛКА. Сканируйте товар для возврата");
+            return;
+        }
+
+        // Начинаем операцию ПОЛКА→ТЕЛЕЖКА
+        startProductToCart(barcode);
+    }
+
+    // ➕ Добавление товара в тележку (режим добавления)
+    function addProductToCart(barcode) {
+        const product = findProduct(barcode);
+        if (product) {
+            state.cartContents[barcode] = (state.cartContents[barcode] || 0) + 1;
+            updateDisplays();
+            alert(`✅ ${product.name} добавлен в тележку`);
+        } else {
+            alert('❌ Товар не найден');
+        }
+    }
+
+    // 📤 Возврат товара на полку
+    async function returnProductToShelf(barcode) {
+        const product = findProduct(barcode);
+        if (product) {
+            if (state.cartContents[barcode] && state.cartContents[barcode] > 0) {
+                state.cartContents[barcode]--;
+                if (state.cartContents[barcode] === 0) {
+                    delete state.cartContents[barcode];
+                }
+                state.shelfContents[barcode]++;
+
+                // Обновляем в Firebase
+                await updateProductQuantityInFirebase(product.id, state.shelfContents[barcode]);
+
+                updateDisplays();
+                alert(`✅ ${product.name} возвращен на полку`);
+                resetOperation();
+            } else {
+                alert(`❌ В тележке нет товара ${product.name}`);
+            }
+        } else {
+            alert('❌ Товар не найден');
+        }
+    }
+
+    // 🎯 Начало операции ПОЛКА→ТЕЛЕЖКА
+    function startProductToCart(barcode) {
+        const product = findProduct(barcode);
+        if (product) {
+            if (state.shelfContents[barcode] > 0) {
+                state.mode = 'confirm_product';
+                state.pendingProduct = barcode;
+                updateStatusBar(`${product.name}. Отсканируйте тележку для подтверждения`);
+            } else {
+                alert(`❌ На полке нет товара ${product.name}`);
+            }
+        } else {
+            alert('❌ Товар не найден');
+        }
+    }
+
+    // ✅ Подтверждение добавления товара
+    async function confirmProductToCart() {
+        if (state.pendingProduct) {
+            const barcode = state.pendingProduct;
+            const product = findProduct(barcode);
+
+            if (product && state.shelfContents[barcode] > 0) {
+                state.shelfContents[barcode]--;
+                state.cartContents[barcode] = (state.cartContents[barcode] || 0) + 1;
+
+                // Обновляем в Firebase
+                await updateProductQuantityInFirebase(product.id, state.shelfContents[barcode]);
+
+                updateDisplays();
+                alert(`✅ ${product.name} добавлен в тележку`);
+            }
+        }
+    }
+
+    // 🔄 Обновление количества в Firebase
+    async function updateProductQuantityInFirebase(productId, newQuantity) {
+        try {
+            await db.collection("inventory").doc(productId).update({
+                quantity: newQuantity,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (error) {
+            console.error('Ошибка обновления количества:', error);
+        }
+    }
+
+    // ✅ Подтверждение выдачи с сохранением в Firebase
+    async function completeTransaction() {
+        const userName = document.getElementById('userName').value.trim();
+
+        if (!userName) {
+            alert('Введите ваше имя');
+            return;
+        }
+
+        if (Object.keys(state.cartContents).length === 0) {
+            alert('Корзина пуста');
+            return;
+        }
+
+        try {
+            // Сохраняем транзакцию в Firebase
+            const transaction = {
+                userName: userName,
+                items: Object.entries(state.cartContents).map(([barcode, quantity]) => {
+                    const product = findProduct(barcode);
+                    return {
+                        barcode: barcode,
+                        name: product ? product.name : 'Неизвестный товар',
+                        quantity: quantity
+                    };
+                }),
+                totalItems: Object.values(state.cartContents).reduce((sum, qty) => sum + qty, 0),
+                date: new Date().toISOString(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection("transactions").add(transaction);
+
+            const totalItems = Object.values(state.cartContents).reduce((sum, qty) => sum + qty, 0);
+            alert(`✅ Выдача оформлена для ${userName}\nТоваров: ${totalItems}\nПозиций: ${Object.keys(state.cartContents).length}`);
+
+            // Очищаем корзину
+            state.cartContents = {};
+            updateDisplays();
+            document.getElementById('userName').value = '';
+
+        } catch (error) {
+            alert('❌ Ошибка при оформлении выдачи: ' + error.message);
+        }
+    }
+
+    // 🔄 Переключение режима добавления
+    function toggleAddProductsMode() {
+        const btn = document.getElementById('addProductsBtn');
+
+        if (state.mode === 'add_products') {
+            state.mode = null;
+            btn.textContent = '📦 Режим добавления';
+            btn.className = 'btn btn-warning';
+            updateStatusBar('Отсканируйте тележку или товар');
+        } else {
+            state.mode = 'add_products';
+            btn.textContent = '❌ Выйти из режима';
+            btn.className = 'btn btn-primary';
+            updateStatusBar('Режим добавления. Сканируйте товары');
+        }
+    }
+
+    // 🗑️ Сброс операции
+    function resetOperation() {
+        state.mode = null;
+        state.currentCart = null;
+        state.pendingProduct = null;
+        updateStatusBar('Отсканируйте тележку или товар');
+    }
+
+    // 📊 Обновление интерфейса
+    function updateDisplays() {
+        updateCartTable();
+        updateShelvesTable();
+    }
+
+    function updateCartTable() {
+        const tbody = document.getElementById('cartTableBody');
+
+        if (Object.keys(state.cartContents).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #666; padding: 20px;">Пусто</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = Object.entries(state.cartContents)
+            .map(([barcode, quantity]) => {
+                const product = findProduct(barcode);
+                if (!product) return '';
+
+                return `
+                    <tr>
+                        <td>${product.name}</td>
+                        <td>${quantity}</td>
+                        <td>
+                            <button class="remove-btn" onclick="removeFromCart('${barcode}')">
+                                Удалить
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            })
+            .join('');
+    }
+
+    function updateShelvesTable() {
+        const tbody = document.getElementById('shelvesTableBody');
+
+        tbody.innerHTML = inventory
+            .map(product => {
+                const quantity = state.shelfContents[product.barcode] || 0;
+                const isLowStock = quantity <= 2;
+
+                return `
+                    <tr>
+                        <td>${product.name}</td>
+                        <td class="${isLowStock ? 'low-stock' : ''}">
+                            ${quantity} ${isLowStock ? '⚠️' : ''}
+                        </td>
+                        <td><small>${product.barcode}</small></td>
+                    </tr>
+                `;
+            })
+            .join('');
+    }
+
+    // ❌ Удаление из корзины
+    function removeFromCart(barcode) {
+        if (state.cartContents[barcode]) {
+            state.shelfContents[barcode] += state.cartContents[barcode];
+            delete state.cartContents[barcode];
+            updateDisplays();
+            alert('✅ Товар удален из тележки');
+        }
+    }
+
+    // 🔧 Вспомогательные функции
+    function findProduct(barcode) {
+        return inventory.find(p => p.barcode === barcode);
+    }
+
+    function updateStatusBar(text) {
+        document.getElementById('statusBar').textContent = text;
+    }
+
+    function updateConnectionStatus(text, className) {
+        const status = document.getElementById('connectionStatus');
+        status.textContent = text;
+        status.className = `connection-status ${className}`;
+    }
+
+    function showAddProductModal() {
+        document.getElementById('addProductModal').style.display = 'flex';
+    }
+
+    function hideAddProductModal() {
+        document.getElementById('addProductModal').style.display = 'none';
+    }
+
+    // 📝 Демо-данные на случай ошибки
+    function loadDemoData() {
+        inventory = [
+            {
+                id: '1',
+                barcode: '12345678909',
+                name: 'Сканер 2D',
+                quantity: 5
+            },
+            {
+                barcode: '12345678908',
+                name: 'Micro-USB порт',
+                quantity: 15
+            },
+            {
+                barcode: '83957295632',
+                name: 'Флешка 8ГБ',
+                quantity: 8
+            }
+        ];
+
+        inventory.forEach(product => {
+            state.shelfContents[product.barcode] = product.quantity;
+        });
+
+        updateDisplays();
+        updateConnectionStatus('⚠️ Локальный режим', 'disconnected');
+    }
+
+    // 🚀 Запуск
+    window.onload = init;
+</script>
+</body>
+</html>
