@@ -559,15 +559,6 @@
 
             await db.collection("transactions").add(transaction);
 
-            // Обновляем количества в инвентаре
-            for (const [barcode, quantity] of Object.entries(state.cartContents)) {
-                const product = findProduct(barcode);
-                if (product) {
-                    const newQuantity = (state.shelfContents[barcode] || 0) - quantity;
-                    await updateProductQuantityInFirebase(product.id, newQuantity);
-                    state.shelfContents[barcode] = newQuantity;
-                }
-            }
 
             const totalItems = Object.values(state.cartContents).reduce((sum, qty) => sum + qty, 0);
             alert(`✅ Выдача оформлена для ${userName}\nТоваров: ${totalItems}\nПозиций: ${Object.keys(state.cartContents).length}`);
@@ -729,3 +720,4 @@
 </script>
 </body>
 </html>
+
